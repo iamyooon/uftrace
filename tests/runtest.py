@@ -10,8 +10,8 @@ import time
 
 class TestBase:
     supported_lang = {
-        'C':   { 'cc': 'gcc', 'flags': 'CFLAGS',   'ext': '.c' },
-        'C++': { 'cc': 'g++', 'flags': 'CXXFLAGS', 'ext': '.cpp' },
+        'C':   { 'cmd1': 'gcc', 'cmd2': 'clang', 'flags': 'CFLAGS',   'ext': '.c' },
+        'C++': { 'cmd1': 'g++', 'cmd2': 'clang++', 'flags': 'CXXFLAGS', 'ext': '.cpp' },
     }
 
     TEST_SUCCESS = 0
@@ -25,6 +25,7 @@ class TestBase:
     TEST_SUCCESS_FIXED = -8
 
     basedir = os.path.dirname(os.getcwd())
+    compiler = 'gcc'
     objdir = 'objdir' in os.environ and os.environ['objdir'] or basedir
     uftrace_cmd = objdir + '/uftrace'
     default_opt = '--no-pager --no-event -L' + objdir
@@ -48,6 +49,15 @@ class TestBase:
         self.option = ''
         self.exearg = 't-' + name
         self.test_feature()
+
+    def get_cmd(self, lang, compiler):
+	if compiler == 'gcc':
+		return lang['cmd1']
+	else:
+		return lang['cmd2']
+
+    def set_compiler(self, compiler):
+        self.compiler = compiler
 
     def set_debug(self, dbg):
         self.debug = dbg
@@ -107,7 +117,7 @@ class TestBase:
                                   os.getenv('LDFLAGS', '')])
 
         build_cmd = '%s -o %s %s %s %s' % \
-                    (lang['cc'], prog, build_cflags, src, build_ldflags)
+                    (self.get_cmd(lang,self.compiler), prog, build_cflags, src, build_ldflags)
 
         self.pr_debug("build command: %s" % build_cmd)
         return self.build_it(build_cmd)
@@ -123,7 +133,7 @@ class TestBase:
         lib_cflags = build_cflags + ' -shared -fPIC'
 
         build_cmd = '%s -o lib%s.so %s s-%s.c %s' % \
-                    (lang['cc'], dstname, lib_cflags, srcname, build_ldflags)
+                    (self.get_cmd(lang, self.compiler), dstname, lib_cflags, srcname, build_ldflags)
 
         build_cmd = build_cmd.replace('-pg', '').replace('-finstrument-functions', '')
         self.pr_debug("build command for library: %s" % build_cmd)
@@ -141,7 +151,7 @@ class TestBase:
 
         # build libabc_test_lib.so library
         build_cmd = '%s -o libabc_test_lib.so %s s-lib.c %s' % \
-                    (lang['cc'], lib_cflags, build_ldflags)
+                    (self.get_cmd(lang, self.compiler), lib_cflags, build_ldflags)
 
         self.pr_debug("build command for library: %s" % build_cmd)
         return self.build_it(build_cmd)
@@ -158,7 +168,7 @@ class TestBase:
 
         # build lib{foo}.so library
         build_cmd = '%s -o lib%s.so %s s-lib%s%s %s' % \
-                    (lang['cc'], name, lib_cflags, name, lang['ext'], build_ldflags)
+                    (self.get_cmd(lang, self.compiler), name, lib_cflags, name, lang['ext'], build_ldflags)
 
         self.pr_debug("build command for library: %s" % build_cmd)
         return self.build_it(build_cmd)
@@ -177,7 +187,7 @@ class TestBase:
         for lib in libs:
             exe_ldflags += ' -l' + lib[3:-3]
 
-        build_cmd = '%s -o %s %s %s %s' % (lang['cc'], prog, build_cflags, srcname, exe_ldflags)
+        build_cmd = '%s -o %s %s %s %s' % (self.get_cmd(lang, self.compiler), prog, build_cflags, srcname, exe_ldflags)
         if not instrument:
             build_cmd = build_cmd.replace('-pg', '').replace('-finstrument-functions', '')
 
@@ -625,6 +635,7 @@ def run_single_case(case, flags, opts, arg):
     exec("import %s; tc = %s.TestCase()" % (case, case), globals(), _locals)
     tc = _locals['tc']
     tc.set_debug(arg.debug)
+    tc.set_compiler(arg.compiler)
     timeout = int(arg.timeout)
 
     for flag in flags:
@@ -740,6 +751,8 @@ def parse_argument():
                         help="fail test if it runs more than TIMEOUT seconds")
     parser.add_argument("-j", "--worker", dest='worker', type=int, default=multiprocessing.cpu_count(),
                         help="Parallel worker count; using all core for default")
+    parser.add_argument("-c", "--compiler", dest='compiler', default="gcc",
+                        help="Select compiler gcc or clang;  using gcc for default")
 
     return parser.parse_args()
 

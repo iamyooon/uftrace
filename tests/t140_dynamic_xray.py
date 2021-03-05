@@ -20,10 +20,8 @@ class TestCase(TestBase):
         return TestBase.TEST_SUCCESS
 
     def build(self, name, cflags='', ldflags=''):
-        old_cc = TestBase.supported_lang['C']['cc']
-        TestBase.supported_lang['C']['cc'] = 'clang'
+	TestBase.compiler = 'clang'
         r = TestBase.build(self, name, '-fxray-instrument -fxray-instruction-threshold=1', '-lstdc++')
-        TestBase.supported_lang['C']['cc'] = old_cc
         return r
 
     def setup(self):
